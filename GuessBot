@@ -1,0 +1,203 @@
+import discord
+import random
+from discord.ext import commands, tasks
+import asyncio
+import json
+import os
+import nltk
+nltk.download('words')
+from nltk.corpus import words
+
+
+#not my original code but it secures bot token
+if os.path.exists(os.getcwd() + "/config.json"):
+    with open("./config.json") as f:
+        configData = json.load(f)
+else:
+    configTemplate = {"Token": "", "Prefix": "!"}
+    with open(os.getcwd() + "/config.json", "w+") as f:
+        json.dump(configTemplate, f)
+
+
+
+#Define ID and Token to make functions cleaner
+BOT_TOKEN = configData["Token"]
+CHANNEL_ID = 1182530527320879145
+PREFIX = configData["Prefix"]
+
+#Common prefix that everyone uses already so it'll make things easier
+bot = commands.Bot(command_prefix=PREFIX, intents=discord.Intents.all())
+
+#Displays to the console when the bot is active
+@bot.event
+async def on_ready():
+    print("IMMM READYYYYY")
+#Defines Guesses And Sets Up A Random Number
+@bot.command()
+async def randomnumber(ctx):
+    randomnumber = random.randint(1, 50)
+    guesses = 7
+    
+    await ctx.send(f'Guess the number between 1 and 50:')
+
+
+    #Loop for using the guesses
+    while guesses > 0:
+        try:
+
+
+            #User Response
+            response = await bot.wait_for('message', check=lambda m: m.author == ctx.author and m.content.isdigit(), timeout=30.0)
+            guessed_number = int(response.content)
+
+
+            #Checks if guess is correct. If so game ends
+            if guessed_number == randomnumber:
+                await ctx.send(f'Congratulations! {ctx.author.mention}! You guessed the correct number {randomnumber}!')
+                return
+            #Checks if incorrect guess is Higher or lower and gives hints to help player
+            elif guessed_number > randomnumber:
+                await ctx.send("Lower")
+            else:
+                await ctx.send("Higher")
+            #Displays how many guesses are left
+            guesses -= 1
+            await ctx.send(f'{guesses} {"tries" if guesses != 1 else "try"} left')
+        except asyncio.TimeoutError:
+            await ctx.send('Time is up. Please try again.')
+            return
+    #If all guesses are used and the number is not correct, game ends
+    await ctx.send(f"Game Over! The correct number was {randomnumber}.")
+
+
+#List of games currently active
+@bot.command()
+async def games(ctx):
+    await ctx.send("1. randomnumber, 2. rr (Russian Roullete), 3. rps (Rock, paper, scissors), 3. hangman")
+
+
+
+#russian Roulette
+@bot.command()
+async def rr(ctx):
+    def check(msg):
+        return msg.author == ctx.message.author and msg.channel == ctx.channel
+    #creates a bullet in a random chamber
+    bullet_pos = random.randint(1,6)
+    author = ctx.message.author
+    #the person you will be facing
+    await ctx.send("Who will you be facing?")
+    try:
+        opposing_msg = await bot.wait_for('message', timeout=30, check=check)
+        opposing = opposing_msg.content
+    except TimeoutError:
+        await ctx.send("Timeout. The game has ended.")
+        return
+    turn = ""
+    for shots in range(1, bullet_pos + 1):
+        if shots % 2 != 0:
+            turn = author
+        else:
+            turn = opposing
+        if shots == bullet_pos:
+            await ctx.send(f"Boom! {turn} was shot, {turn} is deaded. press F to show respect")
+        else:
+            await ctx.send(f"Click {turn} was spared. Lucky you!")
+
+@bot.command()
+async def rps(ctx):
+    rock = "rock"
+    paper = "paper"
+    scissors = "scissors"
+    options = ["scissors", "rock", "paper"]
+    #bot chooses random option
+    bot_choice = random.choice(options)
+    await ctx.send("Choose your tool")
+    def check(message):
+        return message.author == ctx.author and message.channel == ctx.channel
+
+    try:
+        response = await bot.wait_for('message', timeout=30.0, check=check)
+    except asyncio.TimeoutError:
+        return await ctx.send("Timeout. You took too long to respond.")
+    #choose your own option
+    user_choice = response.content.lower()
+    #there is a better way to do this but i didnt wanna retype it
+    if bot_choice == scissors and user_choice == scissors:
+        await ctx.send("Tied")
+    elif bot_choice == rock and user_choice == rock:
+        await ctx.send("Tied")
+    elif bot_choice == paper and user_choice == paper:
+        await ctx.send("Tied")
+    elif bot_choice == rock and user_choice == paper:
+        await ctx.send("You win")
+    elif bot_choice == scissors and user_choice == rock:
+        await ctx.send("You win")
+    elif bot_choice == paper and user_choice == scissors:
+        await ctx.send("You win")
+    elif bot_choice == rock and user_choice == scissors:
+        await ctx.send("You lose")
+    elif bot_choice == scissors and user_choice == paper:
+        await ctx.send("You lose")
+    elif bot_choice == paper and user_choice == rock:
+        await ctx.send("You lose")
+
+    await ctx.send(f"You chose {user_choice} and i chose {bot_choice}")
+
+
+
+
+#beginning of borrowed code
+def choose_word():
+    word_list = words.words()
+    return random.choice(word_list)
+
+def display_word(word, guessed_letters):
+    display = ""
+    for letter in word:
+        if letter in guessed_letters:
+            display += letter
+        else:
+            display += "_"
+    return display
+#end of borrowed code
+
+
+@bot.command()
+async def hangman(ctx):
+    chosen_word = choose_word().lower()
+    guessed_letters = []
+    chances = 10
+
+    await ctx.send("Welcome to hangman. Please don't let me die!")
+    await ctx.send(display_word(chosen_word, guessed_letters))
+    print(chosen_word)
+
+    while chances > 0:
+        
+        response_to_hangman = await bot.wait_for('message', check=lambda m: m.author == ctx.author and m.content.isalpha() and len(m.content) == 1, timeout=30.0)
+        guess = response_to_hangman.content.lower()
+
+        if guess in guessed_letters:
+            await ctx.send("Already guessed that letter. Please try again! 🫥")
+        elif guess in chosen_word:
+            guessed_letters.append(guess)
+            await ctx.send("Lucky guess, Do it again! 👍")
+        else:
+            chances -= 1
+            await ctx.send(f"Womp Womp Womp Woooommmmmp! 😑👎 You have {chances} left! use them wisely")
+
+        current_display = display_word(chosen_word, guessed_letters)
+        await ctx.send(current_display)
+
+        if "_" not in current_display:
+            await ctx.send("Congratulations! You guessed the word!")
+            break
+
+    if chances == 0:
+        await ctx.send(f"Sorry, you ran out of attempts. The word was {chosen_word}.")
+
+
+
+    
+bot.run(BOT_TOKEN)
